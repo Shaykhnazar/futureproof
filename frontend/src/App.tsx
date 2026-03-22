@@ -85,44 +85,73 @@ function App() {
 
             {/* City Info Panel */}
             {selectedCity && (
-              <div className="absolute top-6 right-6 w-80 card">
-                <h3 className="text-xl font-bold mb-2">{selectedCity.name}</h3>
-                <p className="text-sm text-gray-400 mb-4">
-                  {selectedCity.country} • {selectedCity.region}
-                </p>
+              <div className="absolute top-6 right-6 w-80 rounded-xl overflow-hidden shadow-2xl border border-slate-700 bg-slate-900 text-white">
+                {/* Score colour bar */}
+                <div
+                  className="h-1 w-full"
+                  style={{
+                    background:
+                      selectedCity.score >= 85
+                        ? '#10b981'
+                        : selectedCity.score >= 70
+                        ? '#f59e0b'
+                        : '#ef4444',
+                  }}
+                />
 
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-400">Opportunity Score</span>
-                    <span className="text-2xl font-bold text-primary-500">
+                <div className="p-5">
+                  {/* Header */}
+                  <div className="flex items-start justify-between mb-1">
+                    <h3 className="text-xl font-bold leading-tight">{selectedCity.name}</h3>
+                    <button
+                      onClick={() => useGlobeStore.getState().setSelectedCity(null)}
+                      className="text-slate-400 hover:text-white ml-2 mt-0.5 leading-none text-lg"
+                      aria-label="Close"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <p className="text-sm text-slate-400 mb-4">
+                    {selectedCity.country} • {selectedCity.region}
+                  </p>
+
+                  {/* Score */}
+                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-700">
+                    <span className="text-sm text-slate-400">Opportunity Score</span>
+                    <span
+                      className="text-2xl font-bold"
+                      style={{
+                        color:
+                          selectedCity.score >= 85
+                            ? '#10b981'
+                            : selectedCity.score >= 70
+                            ? '#f59e0b'
+                            : '#ef4444',
+                      }}
+                    >
                       {selectedCity.score}/100
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-400">Job Growth</span>
-                      <p className="font-semibold">{selectedCity.job_growth_pct}%</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">AI Investment</span>
-                      <p className="font-semibold">{selectedCity.ai_investment}/100</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Talent Demand</span>
-                      <p className="font-semibold">{selectedCity.talent_demand}/100</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-400">Cost of Living</span>
-                      <p className="font-semibold">{selectedCity.cost_of_living}/100</p>
-                    </div>
+                  {/* Stats grid */}
+                  <div className="grid grid-cols-2 gap-3 text-sm mb-4">
+                    {[
+                      { label: 'Job Growth', value: `${selectedCity.job_growth_pct}%` },
+                      { label: 'AI Investment', value: `${selectedCity.ai_investment}/100` },
+                      { label: 'Talent Demand', value: `${selectedCity.talent_demand}/100` },
+                      { label: 'Cost of Living', value: `${selectedCity.cost_of_living}/100` },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-slate-800 rounded-lg px-3 py-2">
+                        <p className="text-slate-400 text-xs mb-0.5">{label}</p>
+                        <p className="font-semibold text-white">{value}</p>
+                      </div>
+                    ))}
                   </div>
 
-                  <div className="pt-3 border-t border-white/10">
-                    <p className="text-xs text-gray-500">
-                      Population: {selectedCity.population.toLocaleString()}
-                    </p>
-                  </div>
+                  {/* Population */}
+                  <p className="text-xs text-slate-500">
+                    Population: {selectedCity.population.toLocaleString()}
+                  </p>
                 </div>
               </div>
             )}

@@ -1,102 +1,102 @@
-import { useRef, useMemo, useEffect } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Sphere } from '@react-three/drei';
-import * as THREE from 'three';
+import { useCallback, useMemo } from 'react';
+import Map, { Marker, NavigationControl, AttributionControl } from 'react-map-gl/maplibre';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useGlobeStore } from '../store';
 import type { CityWithScore } from '../types';
 
-// City marker component
-function CityMarker({ city, onClick }: { city: CityWithScore; onClick: (city: CityWithScore) => void }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+// Esri World Imagery (free, no API key) + Esri reference labels overlay
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MAP_STYLE: any = {
+  version: 8,
+  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+  fog: {
+    color: 'rgb(10, 15, 30)',
+    'high-color': 'rgb(30, 50, 100)',
+    'horizon-blend': 0.03,
+    'space-color': 'rgb(5, 8, 20)',
+    'star-intensity': 0.6,
+  },
+  sources: {
+    satellite: {
+      type: 'raster',
+      tiles: [
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: '© Esri, Maxar, Earthstar Geographics',
+    },
+    labels: {
+      type: 'raster',
+      tiles: [
+        'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    { id: 'satellite', type: 'raster', source: 'satellite' },
+    { id: 'labels', type: 'raster', source: 'labels', minzoom: 1 },
+  ],
+};
 
-  // Convert lat/lng to 3D coordinates
-  const position = useMemo(() => {
-    const phi = (90 - city.lat) * (Math.PI / 180);
-    const theta = (city.lng + 180) * (Math.PI / 180);
-    const radius = 2.02;
-
-    return new THREE.Vector3(
-      -radius * Math.sin(phi) * Math.cos(theta),
-      radius * Math.cos(phi),
-      radius * Math.sin(phi) * Math.sin(theta)
-    );
-  }, [city.lat, city.lng]);
-
-  // Color based on score
+function CityPin({ city, onClick }: { city: CityWithScore; onClick: (city: CityWithScore) => void }) {
   const color = useMemo(() => {
-    if (city.score >= 85) return '#10b981'; // Green
-    if (city.score >= 70) return '#f59e0b'; // Yellow
-    return '#ef4444'; // Red
+    if (city.score >= 85) return '#10b981';
+    if (city.score >= 70) return '#f59e0b';
+    return '#ef4444';
   }, [city.score]);
 
   return (
-    <mesh
-      ref={meshRef}
-      position={position}
+    <div
       onClick={() => onClick(city)}
-    >
-      <sphereGeometry args={[0.02, 16, 16]} />
-      <meshBasicMaterial color={color} />
-    </mesh>
+      title={city.name}
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: '50%',
+        backgroundColor: color,
+        border: '2px solid white',
+        boxShadow: `0 0 6px ${color}`,
+        cursor: 'pointer',
+        transform: 'translate(-50%, -50%)',
+      }}
+    />
   );
 }
 
-// Rotating Earth
-function Earth() {
-  const meshRef = useRef<THREE.Mesh>(null);
-
-  useFrame(() => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y += 0.001;
-    }
-  });
-
-  return (
-    <Sphere ref={meshRef} args={[2, 64, 64]}>
-      <meshStandardMaterial
-        color="#1e293b"
-        roughness={0.7}
-        metalness={0.2}
-      />
-    </Sphere>
-  );
-}
-
-// Main Globe component
 export function Globe() {
   const { cities, setSelectedCity } = useGlobeStore();
 
-  const handleCityClick = (city: CityWithScore) => {
+  const handleCityClick = useCallback((city: CityWithScore) => {
     setSelectedCity(city);
-    console.log('Selected city:', city.name);
-  };
+  }, [setSelectedCity]);
 
   return (
     <div className="w-full h-screen">
-      <Canvas
-        camera={{ position: [0, 0, 5], fov: 45 }}
-        gl={{ antialias: true }}
+      <Map
+        initialViewState={{ longitude: 20, latitude: 20, zoom: 1.5 }}
+        style={{ width: '100%', height: '100%' }}
+        mapStyle={MAP_STYLE}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        projection={{ name: 'globe' } as any}
+        attributionControl={false}
       >
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-
-        <Earth />
+        <NavigationControl position="bottom-right" showCompass={false} />
+        <AttributionControl compact position="bottom-left" />
 
         {cities.map((city) => (
-          <CityMarker
+          <Marker
             key={city.id}
-            city={city}
-            onClick={handleCityClick}
-          />
+            longitude={city.lng}
+            latitude={city.lat}
+            anchor="center"
+          >
+            <CityPin city={city} onClick={handleCityClick} />
+          </Marker>
         ))}
-
-        <OrbitControls
-          enableZoom={true}
-          enablePan={false}
-          minDistance={3}
-          maxDistance={8}
-        />
-      </Canvas>
+      </Map>
     </div>
   );
 }

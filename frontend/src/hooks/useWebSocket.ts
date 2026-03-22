@@ -2,7 +2,8 @@ import { useEffect, useRef, useCallback } from 'react';
 import type { WebSocketMessage, GlobeUpdate } from '../types';
 import { useGlobeStore } from '../store';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8080';
+const WS_URL = import.meta.env.VITE_WS_URL ||
+  `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 
 export const useWebSocket = () => {
   const wsRef = useRef<WebSocket | null>(null);

@@ -42,10 +42,10 @@ FutureProof helps professionals navigate AI-driven career disruption through int
 ```bash
 git clone <repository-url>
 cd futureproof
-cp .env.example .env
+cp .env.example backend/.env
 ```
 
-### 2. Add API Keys to .env
+### 2. Add API Keys to backend/.env
 
 ```bash
 # Required
@@ -71,7 +71,7 @@ docker-compose ps
 
 ```bash
 cd backend
-go mod download
+go mod tidy
 go run cmd/server/main.go
 ```
 

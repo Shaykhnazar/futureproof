@@ -82,7 +82,7 @@ export function CareerAnalyzer() {
               onChange={(e) =>
                 setFormData({
                   ...formData,
-                  years_exp: parseInt(e.target.value),
+                  years_exp: parseInt(e.target.value) || 0,
                 })
               }
               min="0"

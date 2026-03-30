@@ -174,6 +174,24 @@ func (r *CareerRepository) GetFutureProfessions(ctx context.Context) ([]models.P
 	return professions, rows.Err()
 }
 
+// UpdateProfessionStats updates live market data for a profession
+func (r *CareerRepository) UpdateProfessionStats(ctx context.Context, slug string, salary int, growthPct float64, demandIndex int, aiRiskScore int) error {
+	query := `
+		UPDATE professions
+		SET avg_salary_usd = CASE WHEN $2 > 0 THEN $2 ELSE avg_salary_usd END,
+		    growth_pct     = CASE WHEN $3 <> 0 THEN $3 ELSE growth_pct END,
+		    demand_index   = CASE WHEN $4 > 0 THEN $4 ELSE demand_index END,
+		    ai_risk_score  = CASE WHEN $5 >= 0 THEN $5 ELSE ai_risk_score END,
+		    updated_at     = NOW()
+		WHERE slug = $1
+	`
+	_, err := r.db.Exec(ctx, query, slug, salary, growthPct, demandIndex, aiRiskScore)
+	if err != nil {
+		return fmt.Errorf("failed to update profession stats for %s: %w", slug, err)
+	}
+	return nil
+}
+
 // SaveCareer saves a profession to user's saved list
 func (r *CareerRepository) SaveCareer(ctx context.Context, userID, professionID uuid.UUID, notes string) error {
 	query := `

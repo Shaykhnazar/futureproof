@@ -61,6 +61,7 @@ type ExternalAPIConfig struct {
 	AdzunaAPIKey    string
 	WorldBankAPIURL string
 	BLSAPIKey       string
+	NumbeoAPIKey    string
 }
 
 type CORSConfig struct {
@@ -80,6 +81,7 @@ type WebSocketConfig struct {
 type WorkersConfig struct {
 	ScraperInterval   time.Duration
 	DataFetchInterval time.Duration
+	BLSFetchInterval  time.Duration
 }
 
 // Load reads configuration from environment variables
@@ -120,6 +122,7 @@ func Load() (*Config, error) {
 			AdzunaAPIKey:    getEnv("ADZUNA_API_KEY", ""),
 			WorldBankAPIURL: getEnv("WORLD_BANK_API_URL", "https://api.worldbank.org/v2"),
 			BLSAPIKey:       getEnv("BLS_API_KEY", ""),
+			NumbeoAPIKey:    getEnv("NUMBEO_API_KEY", ""),
 		},
 		CORS: CORSConfig{
 			AllowedOrigins: getEnvSlice("ALLOWED_ORIGINS", []string{"http://localhost:5173", "http://localhost:3000"}),
@@ -135,6 +138,7 @@ func Load() (*Config, error) {
 		Workers: WorkersConfig{
 			ScraperInterval:   getEnvDuration("SCRAPER_INTERVAL", 6*time.Hour),
 			DataFetchInterval: getEnvDuration("DATA_FETCH_INTERVAL", 24*time.Hour),
+			BLSFetchInterval:  getEnvDuration("BLS_FETCH_INTERVAL", 168*time.Hour), // weekly
 		},
 	}
 

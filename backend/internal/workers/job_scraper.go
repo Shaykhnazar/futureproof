@@ -2,87 +2,164 @@ package workers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
+	"github.com/shaykhnazar/futureproof/internal/models"
 	"github.com/shaykhnazar/futureproof/internal/repository"
 )
 
-// JobScraper fetches job market data from external APIs
-type JobScraper struct {
-	cityRepo *repository.CityRepository
-	logger   *zap.Logger
-	apiKey   string
-	appID    string
+// adzunaCountry maps country names to Adzuna country codes
+var adzunaCountry = map[string]string{
+	"USA":         "us",
+	"UK":          "gb",
+	"Germany":     "de",
+	"Canada":      "ca",
+	"Australia":   "au",
+	"Singapore":   "sg",
 }
 
-// NewJobScraper creates a new job scraper
-func NewJobScraper(
-	cityRepo *repository.CityRepository,
-	logger *zap.Logger,
-	apiKey string,
-	appID string,
-) *JobScraper {
+type JobScraper struct {
+	cityRepo   *repository.CityRepository
+	logger     *zap.Logger
+	apiKey     string
+	appID      string
+	httpClient *http.Client
+}
+
+func NewJobScraper(cityRepo *repository.CityRepository, logger *zap.Logger, apiKey, appID string) *JobScraper {
 	return &JobScraper{
-		cityRepo: cityRepo,
-		logger:   logger,
-		apiKey:   apiKey,
-		appID:    appID,
+		cityRepo:   cityRepo,
+		logger:     logger,
+		apiKey:     apiKey,
+		appID:      appID,
+		httpClient: &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-// Run executes the job scraping task
-func (s *JobScraper) Run(ctx context.Context) error {
-	s.logger.Info("Starting job market data scraping")
+type adzunaResponse struct {
+	Count   int `json:"count"`
+	Results []struct {
+		Title    string  `json:"title"`
+		SalaryMax float64 `json:"salary_max"`
+	} `json:"results"`
+}
 
-	// Get all cities
+// Run fetches tech job counts from Adzuna and uses them to update ai_investment scores
+func (s *JobScraper) Run(ctx context.Context) error {
+	if s.appID == "" || s.apiKey == "" || s.appID == "your-adzuna-app-id" {
+		s.logger.Warn("Adzuna credentials not configured, skipping job scrape")
+		return nil
+	}
+
+	s.logger.Info("Starting Adzuna job scrape")
+
 	cities, err := s.cityRepo.GetAllCities(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch cities: %w", err)
+		return fmt.Errorf("failed to load cities: %w", err)
 	}
 
-	s.logger.Info("Scraping job data for cities", zap.Int("city_count", len(cities)))
-
-	// TODO: Implement actual Adzuna API integration
-	// For now, this is a placeholder that demonstrates the structure
-
-	// Example: Scrape jobs for each city
 	for _, city := range cities {
 		select {
 		case <-ctx.Done():
-			s.logger.Info("Job scraping cancelled")
 			return ctx.Err()
 		default:
-			// Placeholder for actual API call
-			s.logger.Debug("Would scrape jobs for city",
-				zap.String("city", city.Name),
-				zap.String("country", city.Country),
-			)
+		}
 
-			// TODO: Make API call to Adzuna
-			// jobs, err := s.fetchJobsFromAdzuna(city.Name, city.Country)
-			// if err != nil {
-			//     s.logger.Error("Failed to fetch jobs", zap.String("city", city.Name), zap.Error(err))
-			//     continue
-			// }
+		countryCode, ok := adzunaCountry[city.Country]
+		if !ok {
+			s.logger.Debug("No Adzuna country mapping, skipping", zap.String("country", city.Country))
+			continue
+		}
 
-			// TODO: Process and store job data
-			// s.processJobs(ctx, city.ID, jobs)
+		// Fetch AI/tech job count for this city
+		techJobs, err := s.fetchJobCount(ctx, countryCode, city.Name, "AI machine learning data science")
+		if err != nil {
+			s.logger.Warn("Adzuna fetch failed", zap.String("city", city.Name), zap.Error(err))
+			continue
+		}
+
+		// Normalise: treat 1000+ tech jobs as score 100
+		aiInvestment := int(float64(techJobs) / 10)
+		if aiInvestment > 100 {
+			aiInvestment = 100
+		}
+
+		score := models.CityScore{
+			CityID:       city.ID,
+			AIInvestment: aiInvestment,
+			SnapshotDate: time.Now(),
+			Source:       "adzuna",
+		}
+
+		if err := s.cityRepo.UpdateCityScore(ctx, score); err != nil {
+			s.logger.Error("Failed to update city AI score", zap.String("city", city.Name), zap.Error(err))
+			continue
+		}
+
+		s.logger.Info("Updated AI investment score",
+			zap.String("city", city.Name),
+			zap.Int("tech_jobs", techJobs),
+			zap.Int("ai_investment", aiInvestment),
+		)
+
+		// Adzuna free tier: 1 req/s
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
 		}
 	}
 
-	s.logger.Info("Job market data scraping completed")
+	s.logger.Info("Adzuna job scrape complete")
 	return nil
 }
 
-// fetchJobsFromAdzuna would make the actual API call
-// func (s *JobScraper) fetchJobsFromAdzuna(city, country string) ([]Job, error) {
-//     url := fmt.Sprintf("https://api.adzuna.com/v1/api/jobs/%s/search/1?app_id=%s&app_key=%s&where=%s",
-//         country, s.appID, s.apiKey, city)
-//
-//     // Make HTTP request
-//     // Parse response
-//     // Return jobs
-//     return nil, nil
-// }
+func (s *JobScraper) fetchJobCount(ctx context.Context, country, city, keywords string) (int, error) {
+	endpoint := fmt.Sprintf("https://api.adzuna.com/v1/api/jobs/%s/search/1", country)
+
+	params := url.Values{}
+	params.Set("app_id", s.appID)
+	params.Set("app_key", s.apiKey)
+	params.Set("where", city)
+	params.Set("what", keywords)
+	params.Set("results_per_page", "1")
+	params.Set("content-type", "application/json")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+params.Encode(), nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("Adzuna returned status %d for %s/%s", resp.StatusCode, country, city)
+	}
+
+	var result adzunaResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("failed to decode Adzuna response: %w", err)
+	}
+
+	return result.Count, nil
+}
+
+// buildAIKeywords generates context-aware search terms
+func buildAIKeywords(professions []string) string {
+	keywords := []string{"AI", "machine learning", "data science", "software engineer"}
+	for _, p := range professions {
+		keywords = append(keywords, p)
+	}
+	return strings.Join(keywords[:4], " ")
+}

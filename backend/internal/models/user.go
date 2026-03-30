@@ -12,7 +12,7 @@ type User struct {
 	Email        string    `json:"email"`
 	Name         string    `json:"name"`
 	PasswordHash string    `json:"-"` // Never expose in JSON
-	AvatarURL    string    `json:"avatar_url"`
+	AvatarURL    *string   `json:"avatar_url"`
 	AuthProvider string    `json:"auth_provider"` // "email", "google", "github"
 	CreatedAt    time.Time `json:"created_at"`
 }
@@ -23,7 +23,7 @@ type UserProfile struct {
 	CurrentJobID *uuid.UUID `json:"current_job_id"`
 	CityID       *uuid.UUID `json:"city_id"`
 	YearsExp     int        `json:"years_exp"`
-	Education    string     `json:"education"`
+	Education    *string    `json:"education"`
 	TargetJobID  *uuid.UUID `json:"target_job_id"`
 	Skills       []string   `json:"skills"`
 	UpdatedAt    time.Time  `json:"updated_at"`

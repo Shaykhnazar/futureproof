@@ -11,11 +11,13 @@ import (
 
 // Scheduler manages periodic background tasks
 type Scheduler struct {
-	config      *config.WorkersConfig
-	logger      *zap.Logger
-	jobScraper  *JobScraper
-	dataFetcher *DataFetcher
-	stopChan    chan struct{}
+	config         *config.WorkersConfig
+	logger         *zap.Logger
+	jobScraper     *JobScraper
+	dataFetcher    *DataFetcher
+	blsFetcher     *BLSFetcher
+	numbeoFetcher  *NumbeoFetcher
+	stopChan       chan struct{}
 }
 
 // NewScheduler creates a new task scheduler
@@ -24,13 +26,17 @@ func NewScheduler(
 	logger *zap.Logger,
 	jobScraper *JobScraper,
 	dataFetcher *DataFetcher,
+	blsFetcher *BLSFetcher,
+	numbeoFetcher *NumbeoFetcher,
 ) *Scheduler {
 	return &Scheduler{
-		config:      cfg,
-		logger:      logger,
-		jobScraper:  jobScraper,
-		dataFetcher: dataFetcher,
-		stopChan:    make(chan struct{}),
+		config:        cfg,
+		logger:        logger,
+		jobScraper:    jobScraper,
+		dataFetcher:   dataFetcher,
+		blsFetcher:    blsFetcher,
+		numbeoFetcher: numbeoFetcher,
+		stopChan:      make(chan struct{}),
 	}
 }
 
@@ -38,11 +44,10 @@ func NewScheduler(
 func (s *Scheduler) Start(ctx context.Context) {
 	s.logger.Info("Starting background task scheduler")
 
-	// Start job scraper
 	go s.runPeriodic(ctx, "Job Scraper", s.config.ScraperInterval, s.jobScraper.Run)
-
-	// Start data fetcher
-	go s.runPeriodic(ctx, "Data Fetcher", s.config.DataFetchInterval, s.dataFetcher.Run)
+	go s.runPeriodic(ctx, "World Bank Fetcher", s.config.DataFetchInterval, s.dataFetcher.Run)
+	go s.runPeriodic(ctx, "BLS Fetcher", s.config.BLSFetchInterval, s.blsFetcher.Run)
+	go s.runPeriodic(ctx, "Numbeo Fetcher", s.config.BLSFetchInterval, s.numbeoFetcher.Run)
 }
 
 // Stop gracefully stops the scheduler

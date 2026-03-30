@@ -19,6 +19,7 @@ import (
 	"github.com/shaykhnazar/futureproof/internal/config"
 	"github.com/shaykhnazar/futureproof/internal/repository"
 	"github.com/shaykhnazar/futureproof/internal/services"
+	"github.com/shaykhnazar/futureproof/internal/workers"
 	"github.com/shaykhnazar/futureproof/pkg/cache"
 	"github.com/shaykhnazar/futureproof/pkg/database"
 	"github.com/shaykhnazar/futureproof/pkg/logger"
@@ -101,6 +102,15 @@ func main() {
 			"time":   time.Now().Unix(),
 		})
 	})
+
+	// Initialize and start background workers
+	jobScraper := workers.NewJobScraper(cityRepo, zapLogger, cfg.ExternalAPI.AdzunaAPIKey, cfg.ExternalAPI.AdzunaAppID)
+	dataFetcher := workers.NewDataFetcher(cityRepo, zapLogger, cfg.ExternalAPI.WorldBankAPIURL, "")
+	blsFetcher := workers.NewBLSFetcher(careerRepo, zapLogger, cfg.ExternalAPI.BLSAPIKey)
+	numbeoFetcher := workers.NewNumbeoFetcher(cityRepo, zapLogger, cfg.ExternalAPI.NumbeoAPIKey)
+	scheduler := workers.NewScheduler(&cfg.Workers, zapLogger, jobScraper, dataFetcher, blsFetcher, numbeoFetcher)
+	scheduler.Start(ctx)
+	defer scheduler.Stop()
 
 	// Setup API routes
 	api.SetupRoutes(app, api.RouterConfig{

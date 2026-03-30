@@ -50,8 +50,11 @@ func (h *AIHandler) AnalyzeCareer(c *fiber.Ctx) error {
 // ChatWithCoach handles POST /api/v1/ai/chat (streaming)
 func (h *AIHandler) ChatWithCoach(c *fiber.Ctx) error {
 	var req struct {
-		Message string   `json:"message"`
-		History []string `json:"history"`
+		Message string `json:"message"`
+		History []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"history"`
 	}
 
 	if err := c.BodyParser(&req); err != nil {
@@ -68,8 +71,14 @@ func (h *AIHandler) ChatWithCoach(c *fiber.Ctx) error {
 	c.Set("Connection", "keep-alive")
 	c.Set("Transfer-Encoding", "chunked")
 
+	// Convert history to role/content pairs
+	history := make([]services.ChatMessage, len(req.History))
+	for i, h := range req.History {
+		history[i] = services.ChatMessage{Role: h.Role, Content: h.Content}
+	}
+
 	// Stream response
-	responseChan, err := h.service.StreamChat(c.Context(), req.Message, req.History)
+	responseChan, err := h.service.StreamChat(c.Context(), req.Message, history)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "Failed to start chat stream")
 	}
